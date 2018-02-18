@@ -1,0 +1,157 @@
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<style>
+		body {
+			margin: 0px;
+			overflow: hidden;
+			background: #000;
+		}
+	</style>
+</head>
+<body>
+<div id="container"></div>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/r61/three.min.js"></script>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+	uniform float time;
+	uniform vec2 resolution;
+	varying vec2 vUv;
+	void main()	{
+		vUv = uv;
+		gl_Position = vec4( position, 1.0 );
+	}
+</script>
+
+<script id="fragmentShader" type="x-shader/x-fragment">
+	uniform float time;
+	uniform vec2 resolution;
+	uniform sampler2D texture1;
+	uniform sampler2D mask;
+	varying vec2 vUv;
+	void main()	{
+		vec4 color = vec4(0.,0.,0.,1.);
+		vec4 color2 = vec4(0.,0.,0.,1.);
+
+		vec4 result;
+
+		vec4 flamecolor = vec4(0.929, 0.706, 0.106, 1.000);
+
+
+		vec4 gradient = mix(vec4(1.,1.,1.,1.),vec4(0.,0.,0.,0.),vUv.y*1.5);
+		vec4 gradientFlame = mix(vec4(0.553, 0.196, 0.024, 1.000),vec4(0.929, 0.706, 0.106, 1.000),vUv.y*2.);
+		// gradient += 0.1;
+
+		vec4 noise = texture2D(texture1,vec2(fract(vUv.x*2.),fract(2.*vUv.y - time/600.)));
+		vec4 maskT = texture2D(mask,vec2(vUv.x + (1. - gradient.r)*sin(time/20. + vUv.y)/30.,vUv.y));
+		
+		noise +=gradient;
+		result = noise*gradient*gradient;
+
+		if(result.r>0.5) {
+			color.r = 1.;
+		} else{
+			color.r = 0.;
+		}
+
+		if(result.r>0.4) {
+			color2.r = 1.;
+		} else{
+			color2.r = 0.;
+		}
+
+
+
+		color = vec4(color.r,color.r,color.r,1.0);
+		color2 = clamp(vec4(color2.r,color2.r,color2.r,1.0) - color,0.,1.);
+
+
+		color *= gradientFlame;
+		color2 *= vec4(0.910, 0.753, 0.518, 1.000);
+
+
+
+
+		gl_FragColor =  color + color2;
+	}
+</script>
+<script>
+	var container;
+	var camera, scene, renderer;
+	var uniforms, material, mesh;
+	var mouseX = 0, mouseY = 0,
+	lat = 0, lon = 0, phy = 0, theta = 0;
+	var windowHalfX = window.innerWidth / 2;
+	var windowHalfY = window.innerHeight / 2;
+	init();
+	var startTime = Date.now();
+	
+
+
+
+	function init() {
+		container = document.getElementById( 'container' );
+		camera = new THREE.Camera();
+		camera.position.z = 1;
+		scene = new THREE.Scene();
+
+
+		function loadImages(paths,whenLoaded){
+		  var imgs=[];
+		  paths.forEach(function(path){
+		    var img = new Image;
+		    img.onload = function(){
+		      imgs.push(img);
+		      if (imgs.length==paths.length) whenLoaded(imgs);
+		    }
+		    img.src = path;
+		  });
+		}
+
+		let images = ['simplex-noise.png','mask.png'];
+		loadImages(images,function(loaded){
+			console.log(loaded);
+
+			let texture1 = new THREE.Texture(loaded[0]);
+			let mask = new THREE.Texture(loaded[1]);
+			texture1.wrapS = texture1.wrapT = THREE.RepeatWrapping;
+			texture1.needsUpdate = true;
+			mask.needsUpdate = true;
+			uniforms = {
+				time: { type: "f", value: 1.0 },
+				texture1: {type: "t", value: texture1},
+				mask: {type: "t", value: mask},
+				resolution: { type: "v2", value: new THREE.Vector2() }
+			};
+			material = new THREE.ShaderMaterial( {
+				uniforms: uniforms,
+				vertexShader: document.getElementById( 'vertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+			});
+			mesh = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), material );
+			scene.add( mesh );
+			renderer = new THREE.WebGLRenderer();
+			container.appendChild( renderer.domElement );
+			uniforms.resolution.value.x = window.innerWidth;
+			uniforms.resolution.value.y = window.innerHeight;
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			animate();
+		})
+
+		
+		
+	}
+	function animate() {
+		requestAnimationFrame( animate );
+		render();
+	}
+	function render() {
+		var elapsedMilliseconds = Date.now() - startTime;
+		var elapsedSeconds = elapsedMilliseconds / 1000.;
+		uniforms.time.value = 60. * elapsedSeconds;
+		renderer.render( scene, camera );
+	}
+</script>
+</body>
+</html>
